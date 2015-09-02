@@ -1,0 +1,151 @@
+USE [BLAH]
+GO
+/****** Object:  StoredProcedure [dbo].[spAddress]    Script Date: 9/2/2015 10:59:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[spAddress] 
+	(
+	@LocID int
+	)
+AS
+
+-- Requires integer Location ID
+-- Returns a single row
+--    LocID int
+--    APN str(30)
+--    FullAddress str(64)
+--    StNum int(7)
+--    StPreQual str(10)
+--    StDir str(2)
+--    StName str(25)
+--    StType str(4)
+--    StPostQual str(5)
+--    Unit str(5)
+--    ZipCode str(10) 00000-0000
+--    PropertyCode str(4)
+--    PropertyDesc str(25)
+--    UseZoneCode str(6)
+--    UseZoneDesc str(25)
+--    Tract str(25)
+--    Phase str(2)
+--    Lot str(3)
+--    BookPage str(20)
+--    Status str(1)
+
+-- Prevent return of intermediate messages to the client during execution
+SET NOCOUNT ON
+
+-- Get Address data
+DECLARE @LMABREP Table
+	(
+	ABAUCD int,
+	ABAJCD int,
+	ABBPCD char(9),
+	ABBDCD char(4),
+	ABA5CD char(6),
+	ABCHCD char(2),
+	ABAECD char(4),
+	ABACCD char(25),
+	ABABTX int,
+	ABADTX char(25),
+	ABACST char(1),
+	ABA1CD char(20),
+	ABDFCD char(5),
+	ABEPCD char(5),
+	ABEMCD char(10)
+	)
+
+INSERT INTO @LMABREP
+SELECT
+	LMABREP.ABAUCD,
+	LMABREP.ABAJCD,
+	LMABREP.ABBPCD,
+	LMABREP.ABBDCD,
+	LMABREP.ABA5CD,
+	LMABREP.ABCHCD,
+	LMABREP.ABAECD,
+	LMABREP.ABACCD,
+	LMABREP.ABABTX,
+	LMABREP.ABADTX,
+	LMABREP.ABACST,
+	LMABREP.ABA1CD,
+	LMABREP.ABDFCD,
+	LMABREP.ABEPCD,
+	LMABREP.ABEMCD
+FROM
+	OXAS400.S104169C.htedta.lmabrep AS LMABREP 
+WHERE LMABREP.ABAUCD = @LocID
+
+-- Get Parcel Xref
+DECLARE @ParcelXref int
+SET @ParcelXref = (SELECT ABAJCD FROM @LMABREP)
+
+-- Get Parcel data
+DECLARE @LMACREP Table
+	(
+	ACAJCD int,
+	ACAKCD char(6),
+	ACALCD char(6),
+	ACAMCD char(6),
+	ACANCD char(6),
+	ACAOCD char(6)
+	)
+
+INSERT INTO @LMACREP
+SELECT
+	LMACREP.ACAJCD,
+	LMACREP.ACAKCD,
+	LMACREP.ACALCD,
+	LMACREP.ACAMCD,
+	LMACREP.ACANCD,
+	LMACREP.ACAOCD
+FROM
+	OXAS400.S104169C.htedta.lmacrep as LMACREP
+WHERE
+	LMACREP.ACAJCD = @ParcelXref
+
+-- Process and return data
+SELECT 
+	LMABREP.ABAUCD as LocID,    
+	RTRIM(LMACREP.ACAKCD) + 
+	RTRIM(LMACREP.ACALCD) + 
+	RTRIM(LMACREP.ACAMCD) + 
+	RTRIM(LMACREP.ACANCD) + 
+	RTRIM(LMACREP.ACAOCD) AS APN, 
+	dbo.ConcatAddr
+		(
+			LMABREP.ABABTX, 
+			LMABREP.ABEMCD, 
+			LMABREP.ABCHCD, 
+			LMABREP.ABACCD, 
+			LMABREP.ABAECD,
+			LMABREP.ABEPCD, 
+			LMABREP.ABDFCD
+		) AS FullAddress, 
+	LMABREP.ABABTX AS StNum, 
+	RTRIM(LMABREP.ABEMCD) AS StPreQual, 
+	RTRIM(LMABREP.ABCHCD) AS StDir, 
+	RTRIM(LMABREP.ABACCD) AS StName, 
+	RTRIM(LMABREP.ABAECD) AS StType, 
+	RTRIM(LMABREP.ABEPCD) AS StPostQual, 
+	RTRIM(LMABREP.ABDFCD) AS Unit, 
+	dbo.FormatZip(LMABREP.ABBPCD) AS ZipCode, 
+	RTRIM(LMABREP.ABBDCD) AS PropertyCode, 
+	RTRIM(LMAJREP.AJAHTX) AS PropertyDesc,
+	RTRIM(LMABREP.ABA5CD) AS UseZoneCode, 
+	RTRIM(LMA2REP.A2BUTX) AS UseZoneDesc,
+	dbo.ConvertTract(LMABREP.ABADTX) AS Tract,
+	dbo.ConvertPhase(LMABREP.ABADTX) AS Phase,
+	dbo.ConvertLot(LMABREP.ABADTX) AS Lot,
+	RTRIM(LMABREP.ABA1CD) AS BookPage,
+	RTRIM(LMABREP.ABACST) AS Status
+FROM
+	@LMABREP AS LMABREP LEFT OUTER JOIN
+	@LMACREP AS LMACREP ON 
+		LMABREP.ABAJCD = LMACREP.ACAJCD LEFT OUTER JOIN
+	dbo.LMAJREP ON 
+		LMABREP.ABBDCD = LMAJREP.AJBDCD LEFT OUTER JOIN
+	dbo.LMA2REP	ON 
+		LMABREP.ABA5CD = LMA2REP.A2A5CD
