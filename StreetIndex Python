@@ -1,0 +1,66 @@
+import arcpy
+from arcpy import env
+
+arcpy.env.overwriteOutput = True
+grid = arcpy.GetParameterAsText(0)
+streets = arcpy.GetParameterAsText(1)
+outputFile = arcpy.GetParameterAsText(2)
+scratchWorkspace = arcpy.GetParameterAsText(3)
+env.workspace = scratchWorkspace
+newFC = "scratchStreetIndex"
+
+def writeToDictionary(rows):
+    d = dict()
+    for row in rows:
+        if row.FullName not in d.keys():
+            d.setdefault(row.FullName, [row.Grid])
+        else:
+            if row.Grid not in d[row.FullName]:
+                d[row.FullName].append(row.Grid)
+    return d
+
+def write_to_table(outputFile, d=dict()):
+    html_file = open(outputFile,"w")
+    html_file.write("""
+        <html>
+        <head>
+        <title> Offical Oxnard Centerline Grid Table Output HTML File </title>
+        </head>
+        <body>
+        <table border=1 width=75% style="text-align:center;margin-left:auto;margin-right:auto;">
+        <tr>
+        <td><h2>Street Name</h2></td>
+        <td colspan="99"><h2>Grid Number</h2></td>
+        </tr>
+        """)
+    for key, valueList in d.iteritems():
+        html_file.write("<tr>\n")
+        html_file.write("<td>")
+        html_file.write(str(key))
+        html_file.write("</td>\n")
+        html_file.write("<td>")
+        html_file.write(", ".join(valueList))
+        html_file.write("</td>")
+        html_file.write("\n</tr>\n")
+    html_file.write("""
+                </table>
+                </body>
+                </html>
+                """)
+    html_file.close()
+
+#Create the feature layers for the spatial join:
+gridFeatureLayer = arcpy.MakeFeatureLayer_management(grid, "GridFeatureLayer")
+streetsFeatureLayer = arcpy.MakeFeatureLayer_management(streets, "StreetsFeatureLayer")
+
+#Execute the spatial join and output the joined feature class to the scratch workspace:
+arcpy.SpatialJoin_analysis(streetsFeatureLayer, gridFeatureLayer, newFC, "JOIN_ONE_TO_MANY", "KEEP_ALL")
+
+#Create the search cursor to iterate through the table and write the data to the dictionary:
+rows = arcpy.SearchCursor(newFC)
+
+#Create the dictionary:
+theDictionary = writeToDictionary(rows)
+
+#Take the dictionary from a variable in memory and write it to an HTML file:
+write_to_table(outputFile, theDictionary)
