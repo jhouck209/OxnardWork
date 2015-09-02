@@ -1,0 +1,65 @@
+import pyodbc
+import arcpy
+from arcpy import env
+
+cnxn = pyodbc.connect("DRIVER={SQL Server};SERVER=BLAHBLAH\SQL2012;DATABASE=HTE;UID=BLAHBLAH;PWD=BLAHBLAH")
+cursor = cnxn.cursor()
+cursor.execute("exec dbo.spAllAddresses")
+rows = cursor.fetchall()
+env.workspace = "C:\Users\BLAHBLAH\AppData\Roaming\ESRI\Desktop10.2\ArcCatalog\GisLoader@DC@DistributionDB@SQL2012.sde"
+env.overwriteOutput = True
+newDataset = "C:\Users\BLAHBLAH\AppData\Roaming\ESRI\Desktop10.2\ArcCatalog\GisLoader@DC@DistributionDB@SQL2012.sde\DistributionDB.GISLOADER.AllAddressesCompare"
+currentDataset = "C:\Users\BLAHBLAH\AppData\Roaming\ESRI\Desktop10.2\ArcCatalog\GisLoader@DC@DistributionDB@SQL2008.sde\distributiondb.GISLOADER.HTE\DistributionDB.GISLOADER.AllAddresses"
+edit = arcpy.da.Editor(env.workspace)
+edit.startEditing()
+edit.startOperation()
+deletecursor = arcpy.da.UpdateCursor(newDataset,["LocID"])
+for drow in deletecursor:
+    if drow[0]:
+        deletecursor.deleteRow()
+
+sdecursor = arcpy.InsertCursor(newDataset)
+
+for row in rows:
+    sderow = sdecursor.newRow()
+    sderow.setValue('LocID', row.LocID)
+    sderow.setValue('APN', row.APN)
+    sderow.setValue('FullAddress', row.FullAddress)
+    sderow.setValue('City', row.City)
+    sderow.setValue('State', row.State)
+    sderow.setValue('StNum', row.StNum)
+    sderow.setValue('StPreQual', row.StPreQual)
+    sderow.setValue('StDir', row.StDir)
+    sderow.setValue('StName', row.StName)
+    sderow.setValue('StType', row.StType)
+    sderow.setValue('StPostQual', row.StPostQual)
+    sderow.setValue('Unit', row.Unit)
+    sderow.setValue('ZipCode', row.ZipCode)
+    sderow.setValue('PropertyCode', row.PropertyCode)
+    sderow.setValue('PropertyDesc', row.PropertyDesc)
+    sderow.setValue('UseZoneCode', row.UseZoneCode)
+    sderow.setValue('UseZoneDesc', row.UseZoneDesc)
+    sderow.setValue('Tract', row.Tract)
+    sderow.setValue('Phase', row.Phase)
+    sderow.setValue('Lot', row.Lot)
+    sderow.setValue('BookPage', row.BookPage)
+    sderow.setValue('Status', row.Status)
+    sdecursor.insertRow(sderow)
+    
+    #print 'the LocID is %s and the type description is %s' % (row.LocID, row.TypeDesc)
+edit.stopOperation()
+edit.stopEditing(True)
+
+arcpy.MakeTableView_management("AllAddressesCompare", "tableView")
+
+arcpy.AddJoin_management("tableView", "LocID", currentDataset, "LOC_ID")
+
+arcpy.SelectLayerByAttribute_management("tableView", "NEW_SELECTION", ' "Loc_ID" IS NULL ')
+
+arcpy.SelectLayerByAttribute_management("tableView", "SUBSET_SELECTION", ' "StPostQual" NOT LIKE \'%RUB%\' AND "StPostQual" NOT LIKE \'%FH%\' ')
+
+arcpy.SelectLayerByAttribute_management("tableView", "SUBSET_SELECTION", ' "StName" NOT LIKE \'%TRACT FILE%\' ')
+
+arcpy.SelectLayerByAttribute_management("tableView", "SUBSET_SELECTION", ' "DistributionDB.GISLOADER.AllAddressesCompare.APN" NOT LIKE \'%888888888%\' AND "DistributionDB.GISLOADER.AllAddressesCompare.APN" NOT LIKE \'%333333333%\' AND "DistributionDB.GISLOADER.AllAddressesCompare.APN" NOT LIKE \'%555555555%\' AND "DistributionDB.GISLOADER.AllAddressesCompare.APN" NOT LIKE \'%777777777%\' AND "DistributionDB.GISLOADER.AllAddressesCompare.APN" NOT LIKE \'%999999999%\' ')
+
+arcpy.CopyRows_management("tableView", "allAddressChangesTable")
