@@ -1,0 +1,40 @@
+import pyodbc
+import arcpy
+
+cnxn = pyodbc.connect("DRIVER={SQL Server};SERVER=BLAHBLAH\SQL2012;DATABASE=HTE;UID=BLAHBLAH;PWD=BLAHBLAH")
+cursor = cnxn.cursor()
+cursor.execute("exec dbo.spCodeComp_ByStatus AC")
+rows = cursor.fetchall()
+workspace = "C:\Users\BLAHBLAH\AppData\Roaming\ESRI\Desktop10.2\ArcCatalog\WebLoader@DC@WebDB@SQL2012.sde"
+dataset = "C:\Users\BLAHBLAH\AppData\Roaming\ESRI\Desktop10.2\ArcCatalog\WebLoader@DC@WebDB@SQL2012.sde\WebDB.WEBLOADER.ActiveCodeCases"
+edit = arcpy.da.Editor(workspace)
+edit.startEditing()
+edit.startOperation()
+deletecursor = arcpy.da.UpdateCursor(dataset,["LocID"])
+for drow in deletecursor:
+    if drow[0]:
+        deletecursor.deleteRow()
+
+
+sdecursor = arcpy.InsertCursor(dataset)
+
+for row in rows:
+    sderow = sdecursor.newRow()
+    sderow.setValue('LocID', row.LocID)
+    sderow.setValue('CaseYear', row.CaseYear)
+    sderow.setValue('CaseNumber', row.CaseNumber)
+    sderow.setValue('TypeCode', row.TypeCode)
+    sderow.setValue('TypeDesc', row.TypeDesc)
+    sderow.setValue('ReportedDate', row.ReportedDate)
+    sderow.setValue('StatusCode', row.StatusCode)
+    sderow.setValue('StatusDesc', row.StatusDesc)
+    sderow.setValue('StatusDate', row.StatusDate)
+    sderow.setValue('OriginCode', row.OriginCode)
+    sderow.setValue('OriginDesc', row.OriginDesc)
+    sderow.setValue('InspCode', row.InspCode)
+    sderow.setValue('InspName', row.InspName)
+    sdecursor.insertRow(sderow)
+    
+    #print 'the LocID is %s and the type description is %s' % (row.LocID, row.TypeDesc)
+edit.stopOperation()
+edit.stopEditing(True)
